@@ -106,7 +106,7 @@ mod tests {
 
     #[tokio::test]
     async fn component_test_happy_case() {
-        let expected_result = " By what he is said and done, a man judges himself by what he is willing to do, by what he might have said, or might have done, a judgment that is necessarily hapered, but only by the scope and limits of his imagination, but by the ever-changing measure of his doubt and self-esteem.";
+        let expected_result = " By what he has said and done, a man judges himself by what he is willing to do, by what he might have said, or might have done, a judgment that is necessarily hapered, but only by the scope and limits of his imagination, but by the ever-changing measure of his doubt and self-esteem.";
 
         let tiny_model_handler = model_handler::ModelHandler::new("Tiny", "models").await;
         let whisper_wrp = Transcriber::new(tiny_model_handler);
@@ -114,7 +114,44 @@ mod tests {
         let result = whisper_wrp
             .transcribe("src/test_data/test.mp3", None)
             .unwrap();
-        let result_text = result.get_text();
+
+        let mut result_text:String = String::new();
+        for segment in result.get_segments() {
+            result_text.push_str(segment.get_text());
+        }
+
+        assert_eq!(expected_result, result_text);
+
+        let _ = std::fs::remove_dir_all("models/");
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn component_test_48k() {
+        let tiny_model_handler = model_handler::ModelHandler::new("Tiny", "models").await;
+        let whisper_wrp = Transcriber::new(tiny_model_handler);
+
+        whisper_wrp
+            .transcribe("src/test_data/test_48k_mono.mp3", None)
+            .unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn component_test_16k_stereo() {
+        let expected_result = " By what he has said and done, a man judges himself by what he is willing to do, by what he might have said, or might have done, a judgment that is necessarily hapered, but only by the scope and limits of his imagination, but by the ever-changing measure of his doubt and self-esteem.";
+
+        let tiny_model_handler = model_handler::ModelHandler::new("Tiny", "models").await;
+        let whisper_wrp = Transcriber::new(tiny_model_handler);
+
+        let result = whisper_wrp
+            .transcribe("src/test_data/test_16k_stereo.mp3", None)
+            .unwrap();
+
+        let mut result_text:String = String::new();
+        for segment in result.get_segments() {
+            result_text.push_str(segment.get_text());
+        }
 
         assert_eq!(expected_result, result_text);
 

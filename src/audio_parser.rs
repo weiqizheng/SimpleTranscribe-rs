@@ -9,6 +9,8 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
+const WHISPER_SAMPLE_RATE: u32 = 16000;
+
 pub fn parse_audio_file(audio_path: &str) -> Vec<f32> {
     // Create a media source. Note that the MediaSource trait is automatically implemented for File,
     // among other types.
@@ -36,6 +38,26 @@ pub fn parse_audio_file(audio_path: &str) -> Vec<f32> {
 
     // Get the default track.
     let track = format.default_track().unwrap();
+
+    if let Some(sample_rate) = track.codec_params.sample_rate {
+        if sample_rate != WHISPER_SAMPLE_RATE {
+            panic!(
+                "audio sample rate must be 16KHz, use {} to convert to mono,16KHz,f32 audio",
+                "ffmpeg -i <input_audio_file> -ac 1 -ar 16000 -sample_fmt fltp <output_audio_file>"
+            );
+        }
+    }
+
+    if let Some(channels) = track.codec_params.channels {
+        let channel_count = channels.count();
+        if channel_count > 2 {
+            panic!(
+                "{} channels not supported, use {} to convert to mono,16KHz,f32 audio",
+                channel_count,
+                "ffmpeg -i <input_audio_file> -ac 1 -ar 16000 -sample_fmt fltp <output_audio_file>"
+            );
+        }
+    }
 
     // Create a decoder for the track.
     let mut decoder = symphonia::default::get_codecs()
@@ -97,10 +119,19 @@ pub fn parse_audio_file(audio_path: &str) -> Vec<f32> {
                 }
 
                 if let Some(buf) = &mut sample_buf {
+                    let is_stereo = audio_buf.spec().channels.count() == 2;
                     buf.copy_interleaved_ref(audio_buf);
 
+                    let mut feed_buffer;
+                    if is_stereo {
+                        feed_buffer =
+                            whisper_rs::convert_stereo_to_mono_audio(&buf.samples()).unwrap();
+                    } else {
+                        feed_buffer = buf.samples().to_vec();
+                    }
+
                     // The samples may now be access via the `samples()` function.
-                    audio_data.append(&mut buf.samples().to_vec());
+                    audio_data.append(&mut feed_buffer);
                 }
             }
             Err(Error::DecodeError(_)) => (),
