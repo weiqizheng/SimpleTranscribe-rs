@@ -3,12 +3,23 @@ use crate::model_handler;
 
 #[derive(Debug)]
 pub struct TranscriberOutput {
+    segments: Vec<TranscriberOutputSegment>,
+}
+
+impl TranscriberOutput {
+    pub fn get_segments(&self) -> &Vec<TranscriberOutputSegment> {
+        &self.segments
+    }
+}
+
+#[derive(Debug)]
+pub struct TranscriberOutputSegment {
     start_timestamp: i64,
     end_timestamp: i64,
     text: String,
 }
 
-impl TranscriberOutput {
+impl TranscriberOutputSegment {
     pub fn get_start_timestamp(&self) -> &i64 {
         &self.start_timestamp
     }
@@ -57,15 +68,15 @@ impl Transcriber {
             .full(params, &audio_data[..])
             .expect("failed to run the model");
 
-        let mut transcribed_string = "".to_string();
-        let mut start_timestamp = 0;
-        let mut end_timestamp = 0;
+        let mut start_timestamp;
+        let mut end_timestamp;
         // fetch the results
         let num_segments = state
             .full_n_segments()
             .expect("failed to get number of segments");
+        let mut output_segments = Vec::with_capacity(num_segments as usize);
         for i in 0..num_segments {
-            let segment = state
+            let segment: String = state
                 .full_get_segment_text(i)
                 .expect("failed to get segment");
             start_timestamp = state
@@ -74,13 +85,15 @@ impl Transcriber {
             end_timestamp = state
                 .full_get_segment_t1(i)
                 .expect("failed to get segment end timestamp");
-            transcribed_string.push_str(&segment);
+            output_segments.push(TranscriberOutputSegment {
+                start_timestamp,
+                end_timestamp,
+                text: segment,
+            });
         }
 
         Ok(TranscriberOutput {
-            start_timestamp,
-            end_timestamp,
-            text: transcribed_string,
+            segments: output_segments,
         })
     }
 }
